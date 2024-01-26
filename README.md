@@ -22,9 +22,7 @@ This Annotation Tool is a Python-based graphical user interface (GUI) applicatio
 2. Ensure that Python 3.x is installed on your system.
 3. Install the required dependencies (Pillow) if they're not already installed.
 4. Navigate to the downloaded code directory.
-5. Run the script using Python:
-
-python3 main.py
+5. Run the script using Python: `python3 main.py`
 
 ## How to Use
 - **Open Folder**: Load multiple folders containing images and JSON files for annotations.
