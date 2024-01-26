@@ -38,9 +38,3 @@ This Annotation Tool is a Python-based graphical user interface (GUI) applicatio
 
 ## License
 Apache License 2.0
-"""
-
-with open("README.md", "w") as file:
- file.write(readme_content)
-
-print("README.md file has been created successfully.")
