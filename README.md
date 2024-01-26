@@ -8,6 +8,8 @@ This Annotation Tool is a Python-based graphical user interface (GUI) applicatio
 - Save updated annotations back to JSON format.
 - Dark and Light theme toggle.
 
+![GUI Example Image](/example.png)
+
 ## Getting Started
 
 ### Dependencies
