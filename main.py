@@ -533,7 +533,7 @@ class AnnotationTool():
 if __name__ == "__main__":
     root = tk.Tk()
     app = AnnotationTool(root)
-    root.tk.call('source','/home/oddish/clave/azure/azure.tcl')
+    root.tk.call('source','./azure/azure.tcl')
     root.tk.call("set_theme", "light")
     theme = tk.BooleanVar(value = False)
 
