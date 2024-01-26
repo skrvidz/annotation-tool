@@ -28,9 +28,9 @@ This Annotation Tool is a Python-based graphical user interface (GUI) applicatio
 - **Open Folder**: Load multiple folders containing images and JSON files for annotations.
 - **Navigation**: Use 'Previous' and 'Next' buttons to navigate between images.
 - **Zoom**: Use 'Zoom In' and 'Zoom Out' buttons to adjust the view.
-- **Annotations**: Use 'Add Annotation' to create new annotations, select existing annotations to edit or delete.
+- **Annotations**: Use 'Add Annotation' to create new annotations, select existing annotations to re-draw or delete.
 - **Theme Toggle**: Switch between light and dark themes for the user interface.
-- **Saving**: Use 'Save JSON' to save updated annotations.
+- **Saving**: Use 'Save JSON' to save updated annotations into the selected folder.
 
 ## File Structure
 - `main.py`: Main application script.
