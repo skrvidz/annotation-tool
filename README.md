@@ -14,7 +14,7 @@ This Annotation Tool is a Python-based graphical user interface (GUI) applicatio
 
 ### Dependencies
 - Python 3.x
-- Tkinter (usually comes with Python)
+- Tkinter (usually comes with Python, if not install python3-tk)
 - PIL (Python Imaging Library): `pip install pillow`
 - JSON support (included in Python standard library)
 - OS module (included in Python standard library)
