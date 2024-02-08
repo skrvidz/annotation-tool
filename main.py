@@ -1,5 +1,7 @@
+import io
 import tkinter as tk
 from tkinter import filedialog, ttk
+import fitz  # PyMuPDF
 from PIL import Image, ImageTk
 import json
 import os
@@ -10,23 +12,6 @@ class AnnotationTool():
     def __init__(self, master):
         self.master = master
         self.master.title("Annotation Tool")
-        
-        # Create a Style
-        style = ttk.Style()
-        
-        # Style configuration for Button
-        style.configure('Redraw.TButton', 
-                        font=('Helvetica', 12, 'bold'), 
-                        foreground='white', 
-                        background='blue',
-                        borderwidth=2,
-                        relief='raised')
-        
-        # Mouse hover style
-        style.map('Redraw.TButton', 
-                  background=[('active', 'lightblue')],
-                  foreground=[('active', 'black')],
-                  relief=[('pressed', 'sunken')])
 
         # Replace the canvas creation in __init__ method with:
         self.canvas_frame = ttk.Frame(master, cursor='crosshair')
@@ -42,11 +27,15 @@ class AnnotationTool():
         self.nav_frame = ttk.Frame(self.canvas_frame, style='Card.TFrame')
         self.nav_frame.pack(side=tk.TOP, pady=5)
 
+        # Filename Label
+        self.filename_label = ttk.Label(self.nav_frame, text="", font=self.font)
+        self.filename_label.pack(side=tk.TOP, fill=tk.BOTH, pady=5)  # Adjust padding as needed
+
         self.btn_prev = ttk.Button(self.nav_frame, text="Previous", command=self.previous_image)
         self.btn_prev.pack(side=tk.LEFT, fill=tk.X, padx=5, pady=5)
 
         self.btn_next = ttk.Button(self.nav_frame, text="Next", command=self.next_image)
-        self.btn_next.pack(side=tk.LEFT, fill=tk.X, padx=5, pady=5)
+        self.btn_next.pack(side=tk.RIGHT, fill=tk.X, padx=5, pady=5)
 
         # Add a frame for zoom controls
         self.zoom_factor = 1.0  # Initialize zoom factor
@@ -82,8 +71,9 @@ class AnnotationTool():
         # Editing Options
         self.edit_frame = ttk.Frame(self.side_menu,style='Card.TFrame')
         self.edit_frame.pack(pady=10)
-
-        self.add = ttk.Button(self.edit_frame, text="Add Annotation",command=self.enter_add_mode)
+        
+        self.add = ttk.Button(self.edit_frame, text="Add Annotation", command=self.toggle_add_mode)
+        #self.add = ttk.Button(self.edit_frame, text="Add Annotation",command=self.enter_add_mode)
         self.add.pack(side=tk.LEFT, fill=tk.BOTH, padx=5,pady=5)
         self.delete_btn = ttk.Button(self.edit_frame, text="Erase Selected", command=self.delete_bbox)
         self.delete_btn.pack(side=tk.LEFT, fill=tk.BOTH, padx=5,pady=5)
@@ -120,6 +110,7 @@ class AnnotationTool():
         if self.json_data:
             for item in self.json_data:
                 self.text_list.insert(tk.END, item['text'])
+            
 
     def redraw_selected(self):
         if not self.image:
@@ -146,6 +137,11 @@ class AnnotationTool():
             self.annotations[rect] = text,text2  # Populate the annotations dictionary
             bbox_coords = (x1, y1, x2, y2)
             self.bbox_list.insert(tk.END, bbox_coords)
+
+    def toggle_add_mode(self):
+        self.adding_bbox = not self.adding_bbox
+        # Update the button text based on the current mode
+        self.add.config(text="Finish Adding" if self.adding_bbox else "Add Annotation")
 
     def enter_add_mode(self):
         self.adding_bbox = True
@@ -181,6 +177,9 @@ class AnnotationTool():
                 'confidence': confidence,
                 'bbox': json_bbox
             }
+            if not self.json_data:
+                self.json_data = []
+
             self.json_data.append(new_annotation)
     
             # Sort the json_data list of dictionaries based on the 'Top' then 'Left' values of the 'bbox'
@@ -225,6 +224,7 @@ class AnnotationTool():
         if folder_paths:
             try:
                 self.files = self.find_pairs(folder_paths)
+                print("self.files")
                 if self.files:
                     self.current_index = 0
                     self.load_image_and_json(*self.files[self.current_index])
@@ -232,31 +232,50 @@ class AnnotationTool():
                 messagebox.showerror("Error", f"An error occurred: {e}")
 
     def find_pairs(self, folder_paths):
-        if isinstance(folder_paths, tuple):
-            # Separate folders for images and JSONs
-            img_folder, json_folder = folder_paths
-            images = [os.path.join(img_folder, f) for f in os.listdir(img_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-            jsons = [os.path.join(json_folder, f) for f in os.listdir(json_folder) if f.lower().endswith('.json')]
-        else:
-            # Multiple folders
-            images, jsons = [], []
-            for folder in folder_paths:
-                images.extend([os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
-                jsons.extend([os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith('.json')])
+        # Extend to include PDF files in the search
+        images, jsons = [], []
+        json_folder = None
 
+        # Distinguish between image/JSON folders and assign JSON folder path
+        for folder in folder_paths:
+            files = os.listdir(folder)
+            if any(f.lower().endswith('.json') for f in files):
+                if json_folder is None:  # Assume the first folder containing any JSON files is the JSON folder
+                    json_folder = folder
+            images.extend([os.path.join(folder, f) for f in files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.pdf'))])
+        
+        if json_folder is None:
+            raise ValueError("No JSON folder found among the provided paths.")
+    
+        jsons = [os.path.join(json_folder, f) for f in os.listdir(json_folder) if f.lower().endswith('.json')]
+        
         pairs = []
         for img_path in images:
             img_name = os.path.splitext(os.path.basename(img_path))[0]
             json_name = img_name + '.json'
-            json_path = next((j for j in jsons if os.path.basename(j) == json_name), None)
-            if json_path:
-                pairs.append((img_path, json_path))
+            json_path = os.path.join(json_folder, json_name)  # This ensures json_path is always a valid path
 
+            if not os.path.exists(json_path):
+                # Create an empty JSON file if it doesn't exist
+                with open(json_path, 'w') as file:
+                    json.dump({}, file)  # Writing an empty JSON object
+            pairs.append((img_path, json_path))
         return pairs
-
+    
     def load_image_and_json(self, image_path, json_path):
         try:
-            self.image = Image.open(image_path)
+            if image_path.lower().endswith('.pdf'):
+                print("pdwhattt")
+                # Open the PDF and convert the first page to a PIL Image
+                with fitz.open(image_path) as doc:
+                    page = doc.load_page(0)  # Load the first page
+                    pix = page.get_pixmap()
+                    img_data = pix.tobytes("ppm")
+                    self.image = Image.open(io.BytesIO(img_data))
+            else:
+                # If not a PDF, open the image as before
+                self.image = Image.open(image_path)
+
             self.photo = ImageTk.PhotoImage(self.image)
 
             self.canvas.delete("all")
@@ -267,11 +286,20 @@ class AnnotationTool():
 
             self.annotations.clear()
             self.draw_annotations()
+            self.draw_filename()
             self.populate_textblocks()
             
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred while loading files: {e}")
-    
+
+    def draw_filename(self):
+        # Extract the original image or PDF file name without extension
+        file_path = self.files[self.current_index][0]
+        img_filename = os.path.basename(file_path)
+        noext_filename = os.path.splitext(img_filename)[0]
+
+        self.filename_label.config(text=noext_filename)
+
     def draw_annotations(self):
 
         self.bbox_list.delete(0, tk.END)
@@ -305,12 +333,12 @@ class AnnotationTool():
 
         if confidence > 90:
             return "#000fff000"  # green
-        elif confidence > 80:
+        elif confidence > 75:
             return "#a3ff00"  # lighter green
-        elif confidence > 70:
-            return "#fff400"  # yellow
-        elif confidence > 60:
-            return "#ffa700"  # orange
+        #elif confidence > 70:
+        #    return "#fff400"  # yellow
+        #elif confidence > 60:
+        #    return "#ffa700"  # orange
         else:
             return "#ff0000"  # red
         
@@ -374,7 +402,7 @@ class AnnotationTool():
         self.buttons.pack(side=tk.TOP, fill=tk.BOTH, pady=10, padx=10)
         # Textblock Selection
         #self.redraw_button = ttk.Button(self.buttons, text="Redraw", command=self.redraw_selected)
-        self.redraw_button = ttk.Button(self.buttons, text="Redraw", style='Redraw.TButton', command=self.redraw_selected)
+        self.redraw_button = ttk.Button(self.buttons, text="Redraw", command=self.redraw_selected)
         self.redraw_button.pack(side=tk.LEFT, fill=tk.Y, padx=5,pady=5)
 
         self.clear_all_btn = ttk.Button(self.buttons, text="Reset", command=self.reset_annotations)
@@ -415,6 +443,17 @@ class AnnotationTool():
         else:
             return
 
+    #def on_canvas_release(self, event):
+    #    if self.adding_bbox:
+    #        curX = self.canvas.canvasx(event.x)
+    #        curY = self.canvas.canvasy(event.y)
+    #        self.canvas.coords(self.rect, self.start_x, self.start_y, curX, curY)
+    #        self.add_annotation((self.start_x, self.start_y, curX, curY))
+    #        self.canvas.delete(self.rect)
+    #        self.adding_bbox = False  # Reset the flag here
+    #    else:
+    #        return
+        
     def on_canvas_release(self, event):
         if self.adding_bbox:
             curX = self.canvas.canvasx(event.x)
@@ -422,7 +461,7 @@ class AnnotationTool():
             self.canvas.coords(self.rect, self.start_x, self.start_y, curX, curY)
             self.add_annotation((self.start_x, self.start_y, curX, curY))
             self.canvas.delete(self.rect)
-            self.adding_bbox = False  # Reset the flag here
+            # Do not reset the flag here, user will toggle the mode manually using the button
         else:
             return
 
@@ -533,6 +572,7 @@ class AnnotationTool():
 if __name__ == "__main__":
     root = tk.Tk()
     app = AnnotationTool(root)
+    current_directory = os.getcwd()
     root.tk.call('source','./azure/azure.tcl')
     root.tk.call("set_theme", "light")
     theme = tk.BooleanVar(value = False)
@@ -540,10 +580,8 @@ if __name__ == "__main__":
     def on_toggle():
         if theme.get():
             root.tk.call("set_theme", "dark")
-            print("Switched to Light Theme")
         else:
             root.tk.call("set_theme", "light")
-            print("Switched to Dark Theme")
 
     toggle_button = ttk.Checkbutton(app.canvas_frame, text='Change Theme', style='Switch.TCheckbutton', variable=theme, command=on_toggle)
     toggle_button.pack()
